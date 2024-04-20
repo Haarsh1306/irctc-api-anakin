@@ -5,5 +5,4 @@ const authenticateAdminApiKey = (req, res, next) => {
     }
     next();
   };
-
 module.exports = authenticateAdminApiKey;

@@ -187,7 +187,6 @@ app.get('/bookings/:bookingId', authenticateToken, async (req, res) => {
     destination: booking.destination,
     seatsBooked: booking.seats_booked
   });
-  
 });
 
 app.listen(3000, () => console.log("Server started on port 3000"));
