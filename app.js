@@ -50,7 +50,7 @@ app.post("/login", async (req, res) => {
   }
 
   const accessToken = jwt.sign(
-    { username: user.username, role: user.role },
+    { email: user.email, role: user.role , userId: user.id},
     process.env.ACCESS_TOKEN_SECRET,
     { expiresIn: "1d" }
   );
@@ -168,10 +168,10 @@ app.post('/book', authenticateToken, async (req, res) => {
 // Get specific booking details
 app.get('/bookings/:bookingId', authenticateToken, async (req, res) => {
   const bookingId = req.params.bookingId;
-
+  const userId = req.user.userId;
   const result = await query(
-    'SELECT b.id, t.name, t.source, t.destination, b.seats_booked FROM bookings b JOIN trains t ON b.train_id = t.id WHERE b.id = ?',
-    [bookingId]
+    'SELECT b.id, t.name, t.source, t.destination, b.seats_booked FROM bookings b JOIN trains t ON b.train_id = t.id WHERE b.id = ? AND b.user_id = ?' ,
+    [bookingId,userId]
   );
   if(result.length === 0){
     return res.status(404).json({
