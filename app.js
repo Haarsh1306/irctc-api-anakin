@@ -119,63 +119,51 @@ app.get("/trains", async (req, res) => {
   }));
 
   res.json(trains);
-
-  connection.query(
-    "SELECT * FROM trains WHERE source = ? AND destination = ?",
-    [source, destination],
-    (err, results) => {
-      if (err) {
-        console.error(err);
-        return res.status(500).send("Error fetching trains");
-      }
-
-      const trains = results.map((train) => ({
-        id: train.id,
-        name: train.name,
-        source: train.source,
-        destination: train.destination,
-        availableSeats: train.total_seats,
-      }));
-
-      res.json(trains);
-    }
-  );
 });
 
+// Booking train
 app.post("/book", authenticateToken, async (req, res) => {
   const { trainId, seats } = req.body;
   const userId = req.user.userId;
-  const result = await query("SELECT total_seats FROM trains WHERE id = ?", [
-    trainId,
-  ]);
+  try {
+    await query("START TRANSACTION");
+    const result = await query(
+      "SELECT total_seats FROM trains WHERE id = ? FOR UPDATE",
+      [trainId]
+    );
 
-  if (result.length === 0) {
-    return res.status(404).json({
-      status: "Train not found",
-      status_code: 404,
-    });
+    if (result.length === 0) {
+      await query("ROLLBACK");
+      return res
+        .status(404)
+        .json({ status: "Train not found", status_code: 404 });
+    }
+
+    const availableSeats = result[0].total_seats;
+    if (availableSeats < seats) {
+      await query("ROLLBACK");
+      return res
+        .status(400)
+        .json({ status: "Not enough seats available", status_code: 400 });
+    }
+    await query(
+      "UPDATE trains SET total_seats = total_seats - ? WHERE id = ?",
+      [seats, trainId]
+    );
+    await query(
+      "INSERT INTO bookings (user_id, train_id, seats_booked) VALUES (?, ?, ?)",
+      [userId, trainId, seats]
+    );
+
+    await query("COMMIT");
+    res
+      .status(200)
+      .json({ status: "Seat booked successfully", status_code: 200 });
+  } catch (err) {
+    await query("ROLLBACK");
+    console.error(err);
+    res.status(500).json({ status: "Internal Server Error", status_code: 500 });
   }
-  const availableSeats = result[0].total_seats;
-  if (availableSeats < seats) {
-    return res.status(400).json({
-      status: "Not enough seats available",
-      status_code: 400,
-    });
-  }
-  const updateResult = await query(
-    "UPDATE trains SET total_seats = total_seats - ? WHERE id = ?",
-    [seats, trainId]
-  );
-
-  const insertBooking = await query(
-    "INSERT INTO bookings (user_id, train_id, seats_booked) VALUES (?, ?, ?)",
-    [userId, trainId, seats]
-  );
-
-  res.status(200).json({
-    status: "Seat booked successfully",
-    status_code: 200,
-  });
 });
 
 // Get specific booking details
@@ -202,4 +190,4 @@ app.get("/bookings/:bookingId", authenticateToken, async (req, res) => {
   });
 });
 
-app.listen(3000, () => console.log("Server started on port 3000"));
+app.listen(3000);
